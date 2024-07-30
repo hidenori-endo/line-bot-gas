@@ -1,44 +1,36 @@
-function myFunction() {
-  const date = new Date();
-  const dayOfWeek = date.getDay(); // 0:日曜日, 1:月曜日, ..., 6:土曜日
-  const day = date.getDate(); // 月の日付を取得
+function notifyGomi() {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const dayOfWeek = tomorrow.getDay(); // 0:日曜日, 1:月曜日, ..., 6:土曜日
+  const dayOfMonth = tomorrow.getDate(); // 月の日付を取得
+  const weekNumber = Math.ceil(dayOfMonth / 7); // 月の第何週目かを計算
 
-  // 月曜日か木曜日の場合
-  if (dayOfWeek === 1 || dayOfWeek === 4) {
-    execute("燃えるゴミ");
-    return;
+  let garbageType = null;
+
+  // 曜日ごとのゴミ出しパターン
+  switch (dayOfWeek) {
+    case 1: // 月曜日
+    case 4: // 木曜日
+      garbageType = "燃えるゴミ";
+      break;
+    case 5: // 金曜日
+      garbageType = "資源物";
+      break;
+    case 3: // 水曜日
+      // 第1週目と第3週目のみ燃えないゴミ
+      if ([1, 3].includes(weekNumber)) {
+        garbageType = "燃えないゴミ";
+      }
+      break;
+    default:
+      // 上記以外の日はゴミの日ではない
+      break;
   }
 
-  // 金曜日の場合
-  if (dayOfWeek === 5) {
-    execute("資源物");
-    return;
+  // ゴミの種類が特定できた場合はLINE通知
+  if (garbageType) {
+    sendLINE(`明日は${garbageType}の収集日です。`);
+  } else {
+    console.log("明日はゴミの日ではありません。");
   }
-
-  // 水曜日の場合のロジック
-  if (dayOfWeek === 3) {
-    const weeks = [1, 3]; // 第1週目、第3週目
-    const weekNumber = Math.ceil(day / 7); // 月の第何週目かを計算
-
-    if (weeks.includes(weekNumber)) {
-      execute("燃えないゴミ");
-      return;
-    }
-  }
-
-  // 他の条件に一致しない場合（オプショナル）
-  console.log("今日はゴミの日ではありません。");
-}
-
-function execute(message) {
-  var url = "https://***.cloudfunctions.net/gomi";
-  var payload = {
-    message: "明日は" + message + "の収集日です",
-  };
-  var response = UrlFetchApp.fetch(url, {
-    method: "POST",
-    contentType: "application/json",
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true,
-  });
 }
