@@ -1,6 +1,6 @@
 // OpenWeatherMap API の設定
 const OPENWEATHERMAP_URL = 'http://api.openweathermap.org/data/2.5/forecast';
-const OPENWEATHERMAP_APPID = '';
+const OPENWEATHERMAP_APPID = PropertiesService.getScriptProperties().getProperty("OPENWEATHERMAP_APPID");
 const CITY_ID = '1850147'; // 東京
 
 // 天気アイコンと日本語の対応表
@@ -32,8 +32,19 @@ function weatherforecast() {
   const response = UrlFetchApp.fetch(url);
   const data = JSON.parse(response.getContentText());
 
-  // 3時間ごとの天気予報 (今日9時〜21時) を取得
-  const forecasts = data.list.slice(3, 8).map((item) => {
+  // 実行時間のタイムゾーンオフセット（ミリ秒）
+  const offset = new Date().getTimezoneOffset() * 60 * 1000;
+
+  // 実行時間の12時〜21時の予報を抽出
+  const forecasts = data.list.filter((item) => {
+    const forecastTime = new Date(item.dt * 1000).getTime(); // 予報時間をミリ秒に変換
+    const currentDayStart = new Date().setHours(0,0,0,0); // 今日0時のミリ秒
+    const targetTimeStart = currentDayStart + 12 * 60 * 60 * 1000; // 今日12時のミリ秒
+    const targetTimeEnd = currentDayStart + 21 * 60 * 60 * 1000; // 今日21時のミリ秒
+
+    // 予報時間が今日12時〜21時の間にあるかどうか
+    return forecastTime >= targetTimeStart && forecastTime <= targetTimeEnd;
+  }).map((item) => {
     const icon = item.weather[0].icon;
     return {
       time: new Date(item.dt * 1000).getHours(),
@@ -47,6 +58,7 @@ function weatherforecast() {
     const rainInfo = '今日は傘を持ちましょう。\n\n';
     const forecastText = forecasts.map((item) => `${item.time}:00  ${item.weather}`).join('\n');
     const message = `${rainInfo}${forecastText}`;
+    // console.log(message);
 
     sendLINE(message);
   }
