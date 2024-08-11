@@ -13,10 +13,6 @@ LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN")
 LINE_GROUP_ID = os.getenv("LINE_GROUP_ID")
 
 
-MAX_RETRIES = 5
-RETRY_DELAY = 15
-
-
 def get_news():
     UNNECESSARY_COMMON = "'\"\’\’”{}\[\]「」『』【】・|^\.|^\．|^\…"
     UNNECESSARY_PATTERN = rf"[\s|\u3000|{UNNECESSARY_COMMON}]"
@@ -44,8 +40,8 @@ def get_news():
     ```
     [{request_news}]
     ```
-    公認会計士の業務に役立つと思われる内容、すなわち会計基準や企業の粉飾決算、内部統制や不正、監査、財務に関係するニュースがあれば、番号を抽出して。
-    短期的な企業業績や株価、スキャンダルなどに関するものは抽出しないで。
+    公認会計士の業務に役立つと思われる内容、すなわち企業の粉飾決算や不正、内部統制、監査、財務、会計基準に関係するニュースがあれば、番号を抽出して。
+    短期的な企業業績や株価などに関するものは抽出しないで。
     該当するものがなかった場合は空のリストで出力して
     """
     return (phrases_prompt, list(news_data.keys()), list(news_data.values()))
@@ -112,7 +108,10 @@ def main(request):
         message = ""
         for title, link in selected_titles_and_links:
             message += f"{title}\n{shorten_url(link)}\n\n"
-        send_line(message)
+        if message != "":
+            send_line(message)
+        else:
+            print("関連するニュースは見つかりませんでした")
         # print(message)
     except (json.JSONDecodeError, KeyError) as e:
         print(f"Error: {e}")
