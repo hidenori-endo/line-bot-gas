@@ -1,8 +1,10 @@
 import json
 import os
+import time
 from xml.etree import ElementTree as ET
 
 import requests
+from fake_useragent import UserAgent
 from linebot import LineBotApi
 from linebot.models import TextSendMessage
 
@@ -11,27 +13,43 @@ LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN")
 LINE_GROUP_ID = os.getenv("LINE_GROUP_ID")
 
 
+MAX_RETRIES = 5
+RETRY_DELAY = 15
+
+
 def get_rss_titles_and_urls(rss_url):
-    response = requests.get(rss_url)
-    response.raise_for_status()
+    for attempt in range(MAX_RETRIES):
+        try:
+            ua = UserAgent()
+            header = {"User-Agent": str(ua.chrome)}
+            response = requests.get(rss_url, headers=header)
+            response.raise_for_status()
 
-    root = ET.fromstring(response.content)
-    channel = root.find("channel")
+            root = ET.fromstring(response.content)
+            channel = root.find("channel")
 
-    titles = []
-    shortened_urls = []
+            titles = []
+            shortened_urls = []
 
-    for item in channel.findall("item"):
-        title = item.find("title").text
-        print(title)
+            for item in channel.findall("item"):
+                title = item.find("title").text
+                print(title)
 
-        original_url = item.find("link").text
-        shortened_url = shorten_url(original_url)
+                original_url = item.find("link").text
+                shortened_url = shorten_url(original_url)
 
-        titles.append(title)
-        shortened_urls.append(shortened_url)
+                titles.append(title)
+                shortened_urls.append(shortened_url)
 
-    return titles, shortened_urls
+            return titles, shortened_urls
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching RSS feed (Attempt {attempt+1}/{MAX_RETRIES}): {e}")
+            if attempt < MAX_RETRIES - 1:
+                print(f"Retrying in {RETRY_DELAY} seconds...")
+                time.sleep(RETRY_DELAY)
+            else:
+                print("Max retries reached. Giving up.")
+                return None, None
 
 
 def shorten_url(url):
@@ -77,6 +95,10 @@ def send_line(message):
 def main(request):
     rss_url = "https://news.google.com/news/rss/headlines/section/topic/BUSINESS?hl=ja&gl=JP&ceid=JP:ja"
     titles, shortened_urls = get_rss_titles_and_urls(rss_url)
+
+    if titles is None or shortened_urls is None:
+        print("Failed to fetch RSS feed. Exiting.")
+        return
 
     articles = []
     number_title = ""
