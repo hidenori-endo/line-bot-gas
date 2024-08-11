@@ -1,9 +1,14 @@
 import json
+import os
 from xml.etree import ElementTree as ET
 
 import requests
 from linebot import LineBotApi
 from linebot.models import TextSendMessage
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN")
+LINE_GROUP_ID = os.getenv("LINE_GROUP_ID")
 
 
 def get_rss_titles_and_urls(rss_url):
@@ -41,7 +46,6 @@ def shorten_url(url):
 
 
 def chat_gpt(number_title):
-    api_key = ""
     api_url = "https://api.openai.com/v1/chat/completions"
     messages = [
         {
@@ -51,7 +55,7 @@ def chat_gpt(number_title):
         {"role": "user", "content": number_title},
     ]
     headers = {
-        "Authorization": f"Bearer {api_key}",
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
         "Content-type": "application/json",
     }
     data = {
@@ -67,11 +71,8 @@ def chat_gpt(number_title):
 
 
 def send_line(message):
-    channel_access_token = ""
-    group_id = ""
-
-    line_bot_api = LineBotApi(channel_access_token)
-    line_bot_api.push_message(group_id, TextSendMessage(text=message))
+    line_bot_api = LineBotApi(LINE_ACCESS_TOKEN)
+    line_bot_api.push_message(LINE_GROUP_ID, TextSendMessage(text=message))
 
 def main(request):
     rss_url = "https://news.google.com/news/rss/headlines/section/topic/BUSINESS?hl=ja&gl=JP&ceid=JP:ja"
