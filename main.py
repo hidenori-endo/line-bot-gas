@@ -14,7 +14,7 @@ LINE_GROUP_ID = os.getenv("LINE_GROUP_ID")
 
 
 def get_news():
-    UNNECESSARY_COMMON = "'\"\’\’”{}\[\]「」『』【】・|^\.|^\．|^\…"
+    UNNECESSARY_COMMON = r"'\"\’\’”{}\[\]「」『』【】・|^\.|^\．|^\…"
     UNNECESSARY_PATTERN = rf"[\s|\u3000|{UNNECESSARY_COMMON}]"
     PARENTHESES_PATTERN = r"（.*?）|［.*?］|〈.*?〉"
 
@@ -41,8 +41,10 @@ def get_news():
     [{request_news}]
     ```
     公認会計士の業務に役立つと思われる内容、すなわち企業の粉飾決算や不正、内部統制、監査、財務、会計基準に関係するニュースがあれば、番号を抽出して。
-    短期的な企業業績や株価などに関するものは抽出しないで。
-    該当するものがなかった場合は空のリストで出力して
+    重複する内容のニュースがあった場合、代表的な1つのみを出力して。
+    不正については、監査において企業の全体的な継続性に対する影響が大きいものを選び、日常的にどこかの企業で発生するような、特定の規制やコストを回避するために行われた短期的な不正は含めないようにしてみてください。
+    また、短期的な企業業績や株価などに関するものも抽出しないで。
+    該当するものがなかった場合は空のリストで出力して。
     """
     return (phrases_prompt, list(news_data.keys()), list(news_data.values()))
 
@@ -110,8 +112,9 @@ def main(request):
             message += f"{title}\n{shorten_url(link)}\n\n"
         if message != "":
             send_line(message)
+            return "ok"
         else:
-            print("関連するニュースは見つかりませんでした")
+            return "関連するニュースは見つかりませんでした"
         # print(message)
     except (json.JSONDecodeError, KeyError) as e:
-        print(f"Error: {e}")
+        return f"Error: {e}"
