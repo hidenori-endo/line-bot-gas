@@ -3,7 +3,6 @@ import os
 import re
 
 import requests
-from GoogleNews import GoogleNews
 from linebot import LineBotApi
 from linebot.models import TextSendMessage
 from openai import OpenAI
@@ -11,42 +10,70 @@ from openai import OpenAI
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN")
 LINE_GROUP_ID = os.getenv("LINE_GROUP_ID")
+NEWS_API_KEY = os.getenv("NEWS_API_KEY")
 
+def remove_leading_whitespace(input_string: str) -> str:
+    """
+    入力文字列の各行の先頭の空白を削除する関数
+    空白のみの行はそのまま残す
+    """
+    # 正規表現パターンを定義
+    pattern = re.compile(r"^(?!\s*$)\s+", re.MULTILINE)
+    # パターンにマッチする部分を削除
+    return pattern.sub("", input_string)
 
 def get_news():
     UNNECESSARY_COMMON = r"'\"\’\’”{}\[\]「」『』【】・|^\.|^\．|^\…"
     UNNECESSARY_PATTERN = rf"[\s|\u3000|{UNNECESSARY_COMMON}]"
     PARENTHESES_PATTERN = r"（.*?）|［.*?］|〈.*?〉"
 
-    googlenews = GoogleNews(lang="ja", region="JP")
-    googlenews.set_topic("CAAqJggKIiBDQkFTRWdvSUwyMHZNRGx6TVdZU0FtcGhHZ0pLVUNnQVAB")
-    googlenews.get_news()
+    news_api_key = NEWS_API_KEY
+    news_api_url = f"https://newsapi.org/v2/top-headlines?country=jp&category=business&apiKey={news_api_key}&pageSize=100&from=2024-08-16"
 
-    # news_textとnews_linkの順番を保持するため、辞書に格納する
-    news_data = {}
-    for text, link in zip(googlenews.get_texts(), googlenews.get_links()):
-        text_without_parentheses = re.sub(PARENTHESES_PATTERN, "", text)
-        cleaned_text = re.sub(UNNECESSARY_PATTERN, "", text_without_parentheses)
-        # 重複を避けるため、cleaned_textをキーとして辞書に格納
-        news_data[cleaned_text] = link
+    response = requests.get(news_api_url)
 
-    request_news = ""
-    cnt = 0
-    for text, link in news_data.items():
-        request_news += f"{cnt},{text}\n"
-        cnt += 1
+    if response.status_code == 200:
+        data = response.json()
 
-    phrases_prompt = f"""
-    ```
-    [{request_news}]
-    ```
-    公認会計士の業務に役立つと思われる内容、すなわち企業の粉飾決算や不正、内部統制、監査、財務、会計基準に関係するニュースがあれば、番号を抽出して。
-    重複する内容のニュースがあった場合、代表的な1つのみを出力して。
-    不正については、監査において企業の全体的な継続性に対する影響が大きいものを選び、日常的にどこかの企業で発生するような、特定の規制やコストを回避するために行われた短期的な不正は含めないようにしてみてください。
-    また、短期的な企業業績や株価などに関するものも抽出しないで。
-    該当するものがなかった場合は空のリストで出力して。
-    """
-    return (phrases_prompt, list(news_data.keys()), list(news_data.values()))
+        # news_textとnews_linkの順番を保持するため、辞書に格納する
+        news_data = {}
+        original_titles = []
+        for article in data["articles"]:
+            title = article["title"]
+            link = article["url"]
+            original_titles.append(title)
+            text_without_parentheses = re.sub(PARENTHESES_PATTERN, "", title)
+            cleaned_text = re.sub(UNNECESSARY_PATTERN, "", text_without_parentheses)
+            # 重複を避けるため、cleaned_textをキーとして辞書に格納
+            news_data[cleaned_text] = link
+
+        request_news = ""
+        cnt = 0
+        for text, link in news_data.items():
+            request_news += f"{cnt},{text}\n"
+            cnt += 1
+
+        phrases_prompt = f"""
+        ```
+        [{request_news}]
+        ```
+        以下の条件に該当するニュースがあれば、番号を抽出してください。
+        メタ認知を用いて、重複する内容のニュースがあった場合、代表的な1つのみを出力してください。
+        該当するものがなかった場合は空のリストで出力してください。
+
+        抽出する条件：公認会計士の業務に役立つと思われる内容。すなわち企業の粉飾決算や不正、内部統制、監査、財務、会計基準に関係するもの
+        抽出しない条件：短期的な企業業績、株価などに関するもの。行政や地方自治体が関係する不祥事に関するもの。
+        """
+        return (
+            phrases_prompt,
+            original_titles,
+            list(news_data.keys()),
+            list(news_data.values()),
+        )
+    else:
+        # エラー処理
+        print(f"Error: {response.status_code}")
+        return None
 
 def chat_gpt(prompt):
     client = OpenAI(api_key=OPENAI_API_KEY)
@@ -93,17 +120,22 @@ def send_line(message):
     line_bot_api.push_message(LINE_GROUP_ID, TextSendMessage(text=message))
 
 def main(request):
-    prompt, titles, links = get_news()
-    # print(prompt)
-    # print("--------------------")
-    response_text = chat_gpt(prompt)
+    result = get_news()
+    if result is None:
+        return "ニュースの取得に失敗しました。"
+    prompt, original_titles, titles, links = result
+    print(prompt.replace("\n", ", "))
+    print("--------------------")
+    response_text = chat_gpt(remove_leading_whitespace(prompt))
     print(response_text)
 
     try:
         response_json = json.loads(response_text)
         selected_ids = [int(id) for id in response_json["id"]]
         selected_titles_and_links = [
-            (titles[i], links[i]) for i in selected_ids if 0 <= i < len(titles)
+            (original_titles[i], links[i])
+            for i in selected_ids
+            if 0 <= i < len(original_titles)
         ]
 
         # LINEに送信するメッセージを作成
