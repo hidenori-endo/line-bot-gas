@@ -12,6 +12,7 @@ LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN")
 LINE_GROUP_ID = os.getenv("LINE_GROUP_ID")
 NEWS_API_KEY = os.getenv("NEWS_API_KEY")
 
+
 def remove_leading_whitespace(input_string: str) -> str:
     """
     入力文字列の各行の先頭の空白を削除する関数
@@ -21,6 +22,7 @@ def remove_leading_whitespace(input_string: str) -> str:
     pattern = re.compile(r"^(?!\s*$)\s+", re.MULTILINE)
     # パターンにマッチする部分を削除
     return pattern.sub("", input_string)
+
 
 def get_news():
     UNNECESSARY_COMMON = r"'\"\’\’”{}\[\]「」『』【】・|^\.|^\．|^\…"
@@ -75,6 +77,7 @@ def get_news():
         print(f"Error: {response.status_code}")
         return None
 
+
 def chat_gpt(prompt):
     client = OpenAI(api_key=OPENAI_API_KEY)
     response = client.chat.completions.create(
@@ -104,6 +107,7 @@ def chat_gpt(prompt):
     )
     return response.choices[0].message.content
 
+
 def shorten_url(url):
     api_url = f"http://tinyurl.com/api-create.php?url={url}"
     try:
@@ -118,6 +122,7 @@ def shorten_url(url):
 def send_line(message):
     line_bot_api = LineBotApi(LINE_ACCESS_TOKEN)
     line_bot_api.push_message(LINE_GROUP_ID, TextSendMessage(text=message))
+
 
 def main(request):
     result = get_news()
@@ -140,8 +145,10 @@ def main(request):
 
         # LINEに送信するメッセージを作成
         message = ""
-        for title, link in selected_titles_and_links:
-            message += f"{title}\n{shorten_url(link)}\n\n"
+        for i, (title, link) in enumerate(selected_titles_and_links):
+            message += f"{title}\n{shorten_url(link)}"
+            if i < len(selected_titles_and_links) - 1:
+                message += "\n\n"
         if message != "":
             send_line(message)
             return "ok"
